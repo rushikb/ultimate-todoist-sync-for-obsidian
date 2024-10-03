@@ -558,6 +558,128 @@ export class FileOperation   {
         }
     }
 
+
+    async replaceContentInVault(oldstring: string, newString: string) {
+        const files = await this.getAllFilesInTheVault();
+    
+        // 创建任务列表
+        const tasks = files.map(async (file) => {
+            // 调用替换函数，并返回成功替换的文件路径
+            if (!this.isMarkdownFile(file.path)) {
+                return;
+            }
+            const result = await this.replaceContentInFile(file.path, oldstring, newString);
+            return result ? file.path : undefined;
+        });
+    
+        // 等待所有任务完成，并筛选出成功替换的文件路径
+        const results = await Promise.all(tasks);
+        const filePaths = results.filter((filePath) => filePath !== undefined);
+        return filePaths.length > 0 ? filePaths : null;
+    }
+    
+    async replaceContentInFile(filepath: string, oldstring: string, newString: string) {
+        try {
+            // 获取文件对象
+            const file = this.app.vault.getAbstractFileByPath(filepath);
+    
+            // 检查文件是否存在
+            if (!file) {
+                console.error(`File not found: ${filepath}`);
+                return false;
+            }
+    
+            // 读取文件内容
+            const fileContent = await this.app.vault.read(file);
+            console.log("Original file content:", fileContent);
+    
+            // 检查文件内容是否包含 oldstring，并打印包含的调试信息
+            if (fileContent.includes(oldstring)) {
+                console.log(`Found the target string "${oldstring}" in the file content.`);
+    
+                // 转义旧字符串中的特殊字符
+                const escapedOldString = oldstring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                console.log("Escaped Old String for RegExp:", escapedOldString);
+    
+                // 使用正则表达式进行替换，确保全局替换所有匹配项
+                const updatedContent = fileContent.replace(new RegExp(escapedOldString, 'g'), newString);
+                console.log("Updated Content:", updatedContent);
+    
+                // 如果内容发生了改变，则更新文件内容
+                if (fileContent !== updatedContent) {
+                    await this.app.vault.modify(file, updatedContent);
+                    console.warn(`File content in "${filepath}" has been changed.`);
+                    return true;
+                } else {
+                    console.warn(`No changes made to the file content in "${filepath}".`);
+                }
+            } else {
+                console.warn(`The target string "${oldstring}" was not found in the file content.`);
+            }
+        } catch (error) {
+            console.error(`An error occurred while replacing content in "${filepath}":`, error);
+        }
+    
+        return false;
+    }
+
+
+
+
+        // 使用通用的正则表达式替换所有文件内容中的指定部分内容的函数
+    async replaceContentInVaultByGenericRegex(contentRegexString: string, matchGroupIndex: number, replacement: string) {
+        const files = await this.getAllFilesInTheVault();
+
+        // 创建任务列表
+        const tasks = files.map(async (file) => {
+            if(!this.isMarkdownFile(file.path)){
+                return
+            }
+            // 调用替换函数，并返回成功替换的文件路径
+            const result = await this.replaceContentInFileByGenericRegex(file.path, contentRegexString, matchGroupIndex, replacement);
+            return result ? file.path : undefined;
+        });
+
+        // 等待所有任务完成，并筛选出成功替换的文件路径
+        const results = await Promise.all(tasks);
+        const filePaths = results.filter((filePath) => filePath !== undefined);
+        return filePaths.length > 0 ? filePaths : null;
+    }
+
+    async  replaceContentInFileByGenericRegex(filepath, contentRegexString, matchGroupIndex, replacement) {
+        // 获取文件对象
+        const file = this.app.vault.getAbstractFileByPath(filepath);
+        const fileContent = await this.app.vault.read(file);
+
+        // 创建正则表达式对象
+        const regex = new RegExp(contentRegexString, 'g');
+
+        // 使用正则表达式替换指定捕获组的内容
+        const updatedContent = fileContent.replace(regex, (match, ...groups) => {
+            // groups[matchGroupIndex - 1] 对应正则表达式中的第 matchGroupIndex 个捕获组
+            if (groups[matchGroupIndex - 1] !== undefined) {
+                // 替换指定捕获组的内容为 replacement
+                return match.replace(groups[matchGroupIndex - 1], replacement);
+            }
+            return match;
+        });
+
+        // 如果内容发生了改变，则更新文件内容
+        if (fileContent !== updatedContent) {
+            await this.app.vault.modify(file, updatedContent);
+            return true;
+        }
+        return false;
+    }
+
+
+
+
+
+
+
+
+
     //get all files in the vault
     async getAllFilesInTheVault(){
         const files = this.app.vault.getFiles()

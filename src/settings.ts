@@ -12,6 +12,7 @@ interface MyProject {
 	//mySetting: string;
 	//todoistTasksFilePath: string;
 	todoistAPIToken: string; // replace with correct type
+	todoistLinkString: string;
 	apiInitialized:boolean;
 	defaultProjectName: string;
 	defaultProjectId:string;
@@ -26,6 +27,7 @@ interface MyProject {
 
 export const DEFAULT_SETTINGS: UltimateTodoistSyncSettings = {
 	initialized: false,
+	todoistLinkString: "💩",
 	apiInitialized:false,
 	defaultProjectName:"Inbox",
 	automaticSynchronizationInterval: 300, //default aync interval 300s
@@ -214,10 +216,10 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 
 
 		new Setting(containerEl)
-		.setName('Check Database')
-		.setDesc('Check for possible issues: sync error, file renaming not updated, or missed tasks not synchronized.')
+		.setName('Rebuild Database')
+		.setDesc('Rebuild Database for possible issues: sync error, file renaming not updated, or missed tasks not synchronized.')
 		.addButton(button => button
-			.setButtonText('Check Database')
+			.setButtonText('Rebuild Database')
 			.onClick(async () => {
 				// Add code here to handle exporting Todoist data
 				if(!this.plugin.settings.apiInitialized){
@@ -543,6 +545,93 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 			})
 			
 		);  
+
+
+		new Setting(containerEl)
+		.setName('Regenerate Todoist URL included in obsidian file')
+		.setDesc('Default todoist link string is [💩] https://todoist.com/showtask?id=123456 , you can replace 💩 with any string you like')
+		.addText((text) =>
+			text
+				.setPlaceholder('Set your todoist link string')
+				.setValue(this.plugin.settings.todoistLinkString)
+				.onChange(async (value) => {
+					this.plugin.settings.todoistLinkString = value;
+					//
+				})
+
+		)
+		.addExtraButton((button) => {
+			button.setIcon('send')
+			.onClick(async () => {
+				// Add code here to handle exporting Todoist data
+
+				
+				const oldString = `[link](https://todoist.com/showtask`
+				const newString = `[${this.plugin.settings.todoistLinkString}](https://todoist.com/showtask`
+				console.log(oldString)
+				console.log(newString)
+				//await this.plugin.fileOperation?.replaceContentInFile("Memos/芜湖碧桂园别墅.md", oldString, newString)
+				await this.plugin.fileOperation?.replaceContentInVault(oldString, newString)
+				
+
+
+				/*
+				const contentRegexString = '\\[([^\]]+)\\]\\(https://todoist\\.com/showtask\\?id=\\d+\\)'
+				const matchGroupIndex = 1
+                const replacement = this.plugin.settings.todoistLinkString
+
+				console.log(contentRegexString)
+				console.log(matchGroupIndex)
+				console.log(replacement)
+				await this.plugin.fileOperation?.replaceContentInFileByGenericRegex("Journal/2023-07-17.md",contentRegexString, matchGroupIndex, replacement)
+				*/
+
+			})
+			
+		})
+
+		new Setting(containerEl)
+		.setName('Rebuild ObsidianUrl URL included in the Todoist task description')
+		.setDesc('Rebuild ObsidianUrl URL included in the Todoist task description')
+		.addButton(button => button
+			.setButtonText('Rebuild Obsidian URL')
+			.onClick(async () => {
+				// Add code here to handle exporting Todoist data
+				if(!this.plugin.settings.apiInitialized){
+					new Notice(`Please set the todoist api first`)
+					throw new Error('Please set the todoist api'); // 抛出异常，中止后续代码执行
+				}
+
+
+				//backup settings and todoist data first
+				try{
+					await this.plugin.syncFromObsidianToTodoist?.backupTodoistAllResources()
+					await this.plugin.syncFromObsidianToTodoist?.backupLocalSettings()
+				}catch{
+					new Notice('The database backup failed, and the database check task cannot be performed.')
+   					throw new Error('Backup failed'); // 抛出异常，中止后续代码执行
+				}
+
+
+				//update todoist resources
+				try{
+					await this.plugin.todoistSyncAPI.syncAllResources()
+				}catch(error){
+					console.error(error);
+					new Notice('Failed to fetch all resources due to network error.')
+					throw new Error('Failed to fetch all resources due to network error');
+				}
+
+				if (!await this.plugin.checkAndHandleSyncLock()) return;
+
+
+				
+
+			})
+			
+		);  
+
+
 
 		new Setting(containerEl)
 			.setName('Debug Mode')
