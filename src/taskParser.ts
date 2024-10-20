@@ -66,6 +66,7 @@ const REGEX = {
         REMOVE_CHECKBOX:  /^(-|\*)\s+\[(x|X| )\]\s/,
         REMOVE_CHECKBOX_WITH_INDENTATION: /^([ \t]*)?(-|\*)\s+\[(x|X| )\]\s/,
         REMOVE_TODOIST_LINK: /\[([^\]]+)\]\(https:\/\/todoist\.com\/showtask\?id=\d+\)/,
+        REMOVE_TODOIST_APP_LINK: /\[([^\]]+)\]\(https:\/\/app\.todoist\.com\/app\/task\/\d+\)/,
     },
     ALL_TAGS: /#[\w\u4e00-\u9fa5-]+/g,
     TASK_CHECKBOX_CHECKED: /- \[(x|X)\] /,
@@ -295,6 +296,7 @@ export class TaskParser   {
     getTaskContentFromLineText(lineText:string) {
         const TaskContent = lineText.replace(REGEX.TASK_CONTENT.REMOVE_INLINE_METADATA,"")
                                     .replace(REGEX.TASK_CONTENT.REMOVE_TODOIST_LINK,"")
+                                    .replace(REGEX.TASK_CONTENT.REMOVE_TODOIST_APP_LINK,"")
                                     .replace(REGEX.TASK_CONTENT.REMOVE_PRIORITY," ") //priority 前后必须都有空格，
                                     .replace(REGEX.TASK_CONTENT.REMOVE_TAGS,"")
                                     .replace(REGEX.TASK_CONTENT.REMOVE_DATE,"")
