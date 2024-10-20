@@ -1,5 +1,6 @@
 import { App} from 'obsidian';
 import UltimateTodoistSyncForObsidian from "../main";
+import { time } from 'console';
 export class FileOperation   {
 	app:App;
     plugin: UltimateTodoistSyncForObsidian;
@@ -236,7 +237,7 @@ export class FileOperation   {
                     continue
                 }
                 const todoistLink = taskObject.url
-                const link = `[link](${todoistLink})`
+                const link = `[${this.plugin.settings.todoistLinkString}]](${todoistLink})`
                 const newLine = this.plugin.taskParser.addTodoistLink(line,link)
                 console.log(newLine)
                 lines[i] = newLine
@@ -352,6 +353,9 @@ export class FileOperation   {
 				const oldTaskContent = this.plugin.taskParser.getTaskContentFromLineText(line)
 				const newTaskContent = taskContent
 
+                if(newTaskContent === oldTaskContent){
+                    throw new Error(`An error occured while updating task content in file ${filepath}, at line ${line}, task content was not changed! newContent:${newTaskContent}`)
+                }
 				let newline = line.replace(oldTaskContent, newTaskContent)
                 console.warn(`Update task content in file ${filepath}, at line ${line}`)
                 console.warn(`old content: ${oldTaskContent}, new content ${newTaskContent}`)
@@ -372,6 +376,9 @@ export class FileOperation   {
 
     // sync updated task due date  to the file
     async updateTaskDueDateInFile(taskId, filepath, dueDate, timezone) {
+
+
+
         // 获取任务文件路径
         let currentTask
         try{

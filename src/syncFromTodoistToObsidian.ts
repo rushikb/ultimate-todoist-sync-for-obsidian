@@ -209,12 +209,17 @@ export class SyncFromTodoistToObsidian  {
             throw error
         }
 
-        const dueDate = e.extra_data.due_date
+        let dueDate = e.extra_data.due_date
+        let timezone = this.plugin.taskParser?.getLocalSystemTimezone()
         const filepath = this.plugin.cacheOperation?.getTaskFilepathFromCache(taskId) || this.plugin.fileOperation.searchFilepathsByTaskidInVault(taskId) || null
 
-        
+        if(this.plugin.taskParser?.isUTCFormat(dueDate)){
+            dueDate = this.plugin.taskParser.convertUtcToLocalDate(dueDate)
+
+        }
+
         try{
-            this.plugin.fileOperation.updateTaskDueDateInFile(taskId,filepath,dueDate)
+            this.plugin.fileOperation.updateTaskDueDateInFile(taskId,filepath,dueDate,timezone)
         }catch(error){
             console.error(error)
         }

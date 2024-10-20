@@ -1,5 +1,6 @@
 import { App} from 'obsidian';
 import UltimateTodoistSyncForObsidian from "../main";
+import { time } from 'console';
 
 
 
@@ -52,7 +53,7 @@ const REGEX = {
     TODOIST_TAG: new RegExp(`^[\\s]*[-] \\[[x ]\\] [\\s\\S]*${keywords.TODOIST_TAG}[\\s\\S]*$`, "i"),
     TODOIST_ID: /\[todoist_id::\s*\d+\]/,
     TODOIST_ID_NUM:/\[todoist_id::\s*(.*?)\]/,
-    TODOIST_LINK:/\[([^\]]+)\]\(https:\/\/todoist\.com\/showTask\?id=\d+\)/,
+    TODOIST_LINK:/\[([^\]]+)\]\(https:\/\/todoist\.com\/showtask\?id=\d+\)/,
     DUE_DATE_WITH_EMOJ: new RegExp(`(${keywords.DUE_DATE})\\s?\\d{4}-\\d{2}-\\d{2}`),
     DUE_DATE : new RegExp(`(?:${keywords.DUE_DATE})\\s?(\\d{4}-\\d{2}-\\d{2})`),
     PROJECT_NAME: /\[project::\s*(.*?)\]/,
@@ -64,7 +65,7 @@ const REGEX = {
         REMOVE_INLINE_METADATA: /%%\[\w+::\s*\w+\]%%/,
         REMOVE_CHECKBOX:  /^(-|\*)\s+\[(x|X| )\]\s/,
         REMOVE_CHECKBOX_WITH_INDENTATION: /^([ \t]*)?(-|\*)\s+\[(x|X| )\]\s/,
-        REMOVE_TODOIST_LINK: /\[link\]\(.*?\)/,
+        REMOVE_TODOIST_LINK: /\[([^\]]+)\]\(https:\/\/todoist\.com\/showtask\?id=\d+\)/,
     },
     ALL_TAGS: /#[\w\u4e00-\u9fa5-]+/g,
     TASK_CHECKBOX_CHECKED: /- \[(x|X)\] /,
@@ -365,7 +366,9 @@ export class TaskParser   {
     }
 
     getLocalSystemTimezone(){
-        return Intl.DateTimeFormat().resolvedOptions().timeZone; // 系统时区
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; // 系统时区
+        console.log(`System timezone: ${timezone}`)
+        return timezone
     }
 
 
@@ -559,20 +562,10 @@ export class TaskParser   {
                 throw new Error("输入的 UTC 时间字符串格式不正确，应为 'YYYY-MM-DDTHH:MM:SSZ' 格式。");
             }
     
-            // 获取本地时间与 UTC 时间的时差（单位：分钟），注意这是相对于本地时区的分钟差
-            const localOffsetMinutes = new Date().getTimezoneOffset();
-            
-            // 将分钟差转换为毫秒，并计算本地时间
-            const localTime = new Date(utcTime.getTime() - localOffsetMinutes * 60 * 1000);
-    
-            // 格式化日期字符串为 YYYY-MM-DD
-            const year = localTime.getFullYear();
-            const month = String(localTime.getMonth() + 1).padStart(2, '0'); // 月份从 0 开始，因此要加 1
-            const day = String(localTime.getDate()).padStart(2, '0');
-    
-            // 拼接格式化后的日期字符串
-            const localDateStr = `${year}-${month}-${day}`;
-    
+            // 直接使用 toLocaleDateString() 获取本地日期字符串
+            // 不指定区域代码和选项时，toLocaleDateString() 默认会根据本地设置输出日期格式
+            const localDateStr = utcTime.toLocaleDateString(); // 使用 ISO 格式 YYYY-MM-DD
+            console.log(localDateStr)
             return localDateStr;
         } catch (error) {
             console.error("发生错误:", error.message);
