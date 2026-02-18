@@ -28,7 +28,9 @@ export interface UltimateTodoistSyncSettings {
 export const DEFAULT_SETTINGS: UltimateTodoistSyncSettings = {
 	initialized: false,
 	apiInitialized:false,
+	todoistAPIToken: '',
 	defaultProjectName:"Inbox",
+	defaultProjectId: '',
 	automaticSynchronizationInterval: 300, //default aync interval 300s
 	todoistTasksData:{"projects":[],"tasks":[],"events":[]},
 	fileMetadata:{},
@@ -60,10 +62,10 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'Settings for Ultimate Todoist Sync for Obsidian.' });
 
-		const myProjectsOptions: MyProject | undefined = this.plugin.settings.todoistTasksData?.projects?.reduce((obj, item) => {
+		const myProjectsOptions: Record<string, string> = this.plugin.settings.todoistTasksData?.projects?.reduce((obj: any, item: any) => {
 			obj[(item.id).toString()] = item.name;
 			return obj;
-		  }, {});	  
+		  }, {}) ?? {};	  
 
 		new Setting(containerEl)
 			.setName('Todoist API')
@@ -161,7 +163,7 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 						.addOptions(myProjectsOptions)
 						.onChange((value)=>{
 							this.plugin.settings.defaultProjectId = value
-							this.plugin.settings.defaultProjectName = this.plugin.cacheOperation.getProjectNameByIdFromCache(value)
+							this.plugin.settings.defaultProjectName = this.plugin.cacheOperation!.getProjectNameByIdFromCache(value)
 							this.plugin.saveSettings()
 							
 							
@@ -230,15 +232,15 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 
 				//check file metadata
 				console.log('checking file metadata')
-				await this.plugin.cacheOperation.checkFileMetadata()
+				await this.plugin.cacheOperation!.checkFileMetadata()
 				this.plugin.saveSettings()
-				const metadatas = await this.plugin.cacheOperation.getFileMetadatas()
+				const metadatas = await this.plugin.cacheOperation!.getFileMetadatas()
 				// check default project task amounts
 				try{
 					const projectId = this.plugin.settings.defaultProjectId
-					let options = {}
+					let options: any = {}
 					options.projectId = projectId
-					const tasks = await this.plugin.todoistRestAPI.GetActiveTasks(options)
+					const tasks = await this.plugin.todoistRestAPI!.GetActiveTasks(options)
 					let length = tasks.length
 					if(length >= 300){
 						new Notice(`The number of tasks in the default project exceeds 300, reaching the upper limit. It is not possible to add more tasks. Please modify the default project.`)
@@ -264,21 +266,21 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 						let taskObject
 
 						try{
-							taskObject = await this.plugin.cacheOperation.loadTaskFromCacheyID(taskId)
+							taskObject = await this.plugin.cacheOperation!.loadTaskFromCacheyID(taskId)
 						}catch(error){
-							console.error(`An error occurred while loading task cache: ${error.message}`);
+							console.error(`An error occurred while loading task cache: ${(error as any).message}`);
 						}
 
 						if(!taskObject){
 							console.log(`The task data of the ${taskId} is empty.`)
-							//get from todoist 
+							//get from todoist
 							try {
-								taskObject = await this.plugin.todoistRestAPI.getTaskById(taskId);
+								taskObject = await this.plugin.todoistRestAPI!.getTaskById(taskId);
 							  } catch (error) {
-								if (error.message.includes('404')) {
+								if ((error as any).message.includes('404')) {
 								  // 处理404错误
 								  console.log(`Task ${taskId} seems to not exist.`);
-								  await this.plugin.cacheOperation.deleteTaskIdFromMetadata(key,taskId)
+								  await this.plugin.cacheOperation!.deleteTaskIdFromMetadata(key,taskId)
 								  continue
 								} else {
 								  // 处理其他错误
@@ -300,15 +302,15 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 					for (const key in metadatas) {
 						const value = metadatas[key];
 						//console.log(value)
-						const newDescription = this.plugin.taskParser.getObsidianUrlFromFilepath(key)
+						const newDescription = this.plugin.taskParser!.getObsidianUrlFromFilepath(key)
 						for(const taskId of value.todoistTasks) {
 							
 							//console.log(`${taskId}`)
 							let taskObject
 							try{
-								taskObject = await this.plugin.cacheOperation.loadTaskFromCacheyID(taskId)
+								taskObject = await this.plugin.cacheOperation!.loadTaskFromCacheyID(taskId)
 							}catch(error){
-								console.error(`An error occurred while loading task ${taskId} from cache: ${error.message}`);
+								console.error(`An error occurred while loading task ${taskId} from cache: ${(error as any).message}`);
 								console.log(taskObject)
 							}
 							if(!taskObject){
@@ -348,14 +350,14 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 						if(v.extension == "md"){
 							try{
 								//console.log(`Scanning file ${v.path}`)
-								await this.plugin.fileOperation.addTodoistLinkToFile(v.path)
+								await this.plugin.fileOperation!.addTodoistLinkToFile(v.path)
 								if(this.plugin.settings.enableFullVaultSync){
-									await this.plugin.fileOperation.addTodoistTagToFile(v.path)
+									await this.plugin.fileOperation!.addTodoistTagToFile(v.path)
 								}
 
 								
 							}catch(error){
-								console.error(`An error occurred while check new tasks in the file: ${v.path}, ${error.message}`);
+								console.error(`An error occurred while check new tasks in the file: ${v.path}, ${(error as any).message}`);
 								
 							}
 
@@ -395,7 +397,7 @@ export class UltimateTodoistSyncSettingTab extends PluginSettingTab {
 						new Notice(`Please set the todoist api first`)
 						return
 					}
-					this.plugin.todoistSync.backupTodoistAllResources()
+					this.plugin.todoistSync!.backupTodoistAllResources()
 				})
 			);
 

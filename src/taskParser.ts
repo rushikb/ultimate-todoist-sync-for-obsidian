@@ -50,7 +50,7 @@ const keywords = {
 
 const REGEX = {
     TODOIST_TAG: new RegExp(`^[\\s]*[-] \\[[x ]\\] [\\s\\S]*${keywords.TODOIST_TAG}[\\s\\S]*$`, "i"),
-    TODOIST_ID: /\[todoist_id::\s*\d+\]/,
+    TODOIST_ID: /\[todoist_id::\s*[\w]+\]/,
     TODOIST_ID_NUM:/\[todoist_id::\s*(.*?)\]/,
     TODOIST_LINK:/\[link\]\(.*?\)/,
     DUE_DATE_WITH_EMOJ: new RegExp(`(${keywords.DUE_DATE})\\s?\\d{4}-\\d{2}-\\d{2}`),
@@ -105,9 +105,9 @@ export class TaskParser   {
         //读取filepath
         //const fileContent = await this.plugin.fileOperation.readContentFromFilePath(filepath)
         //遍历 line
-        const lines = fileContent.split('\n')
+        const lines = fileContent!.split('\n')
         //console.log(lines)
-        for (let i = (lineNumber - 1 ); i >= 0; i--) {
+        for (let i = (lineNumber! - 1 ); i >= 0; i--) {
             //console.log(`正在check${i}行的缩进`)
             const line = lines[i]
             //console.log(line)
@@ -126,7 +126,7 @@ export class TaskParser   {
                     parentId = this.getTodoistIdFromLineText(line)
                     hasParent = true
                     //console.log(`parent id is ${parentId}`)
-                    parentTaskObject = this.plugin.cacheOperation.loadTaskFromCacheyID(parentId)
+                    parentTaskObject = this.plugin.cacheOperation!.loadTaskFromCacheyID(parentId as string)
                     break
                 }
                 else{
@@ -147,21 +147,21 @@ export class TaskParser   {
         //const projectId = await this.plugin.cacheOperation.getProjectIdByNameFromCache(projectName)
         //use tag as project name
 
-        let projectId = this.plugin.cacheOperation.getDefaultProjectIdForFilepath(filepath as string)
-        let projectName = this.plugin.cacheOperation.getProjectNameByIdFromCache(projectId)
+        let projectId = this.plugin.cacheOperation!.getDefaultProjectIdForFilepath(filepath as string)
+        let projectName = this.plugin.cacheOperation!.getProjectNameByIdFromCache(projectId)
 
         if(hasParent){
-            projectId = parentTaskObject.projectId
-            projectName =this.plugin.cacheOperation.getProjectNameByIdFromCache(projectId)
+            projectId = parentTaskObject?.projectId
+            projectName =this.plugin.cacheOperation!.getProjectNameByIdFromCache(projectId)
         }
         if(!hasParent){
                     //匹配 tag 和 peoject
-            for (const label of labels){
+            for (const label of labels ?? []){
         
                 //console.log(label)
                 let labelName = label.replace(/#/g, "");
                 //console.log(labelName)
-                let hasProjectId = this.plugin.cacheOperation.getProjectIdByNameFromCache(labelName)
+                let hasProjectId = this.plugin.cacheOperation!.getProjectIdByNameFromCache(labelName)
                 if(!hasProjectId){
                     continue
                 }
@@ -244,7 +244,7 @@ export class TaskParser   {
         return result ? result[1] : null;
     }
   
-    getDueDateFromDataview(dataviewTask:object){
+    getDueDateFromDataview(dataviewTask:any){
         if(!dataviewTask.due){
         return ""
         }
@@ -289,15 +289,15 @@ export class TaskParser   {
   
   
     //get all tags from task text
-    getAllTagsFromLineText(lineText:string){
-        let tags = lineText.match(REGEX.ALL_TAGS);
-    
-        if (tags) {
+    getAllTagsFromLineText(lineText:string): string[] | null {
+        const matchResult = lineText.match(REGEX.ALL_TAGS);
+
+        if (matchResult) {
             // Remove '#' from each tag
-            tags = tags.map(tag => tag.replace('#', ''));
+            return matchResult.map(tag => tag.replace('#', ''));
         }
-    
-        return tags;
+
+        return null;
     }
   
     //get checkbox status
@@ -307,7 +307,7 @@ export class TaskParser   {
   
   
     //task content compare
-    taskContentCompare(lineTask:Object,todoistTask:Object) {
+    taskContentCompare(lineTask:any,todoistTask:any) {
         const lineTaskContent = lineTask.content
         //console.log(dataviewTaskContent)
         
@@ -321,7 +321,7 @@ export class TaskParser   {
   
   
     //tag compare
-    taskTagCompare(lineTask:Object,todoistTask:Object) {
+    taskTagCompare(lineTask:any,todoistTask:any) {
     
     
         const lineTaskTags = lineTask.labels
@@ -331,14 +331,14 @@ export class TaskParser   {
         //console.log(todoistTaskTags)
     
         //content 是否修改
-        const tagsModified  = lineTaskTags.length === todoistTaskTags.length && lineTaskTags.sort().every((val, index) => val === todoistTaskTags.sort()[index]);
+        const tagsModified  = lineTaskTags.length === todoistTaskTags.length && lineTaskTags.sort().every((val: any, index: number) => val === todoistTaskTags.sort()[index]);
         return(tagsModified) 
     }
   
     //task status compare
-    taskStatusCompare(lineTask:Object,todoistTask:Object) {
+    taskStatusCompare(lineTask:any,todoistTask:any) {
         //status 是否修改
-        const statusModified = (lineTask.isCompleted === todoistTask.isCompleted)
+        const statusModified = (lineTask.isCompleted === todoistTask.checked)
         //console.log(lineTask)
         //console.log(todoistTask)
         return(statusModified)
@@ -346,7 +346,7 @@ export class TaskParser   {
   
   
     //task due date compare
-    async  compareTaskDueDate(lineTask: object, todoistTask: object): boolean {
+    async  compareTaskDueDate(lineTask: any, todoistTask: any): Promise<boolean> {
         const lineTaskDue = lineTask.dueDate
         const todoistTaskDue = todoistTask.due ?? "";
         //console.log(dataviewTaskDue)
@@ -379,7 +379,7 @@ export class TaskParser   {
     
   
     //task project id compare
-    async  taskProjectCompare(lineTask:Object,todoistTask:Object) {
+    async  taskProjectCompare(lineTask:any,todoistTask:any) {
         //project 是否修改
         //console.log(dataviewTaskProjectId)
         //console.log(todoistTask.projectId)
@@ -411,7 +411,7 @@ export class TaskParser   {
   
   
     //remove task indentation
-    removeTaskIndentation(text) {
+    removeTaskIndentation(text: any) {
         const regex = /^([ \t]*)?- \[(x| )\] /;
         return text.replace(regex, "- [$2] ");
     }
@@ -424,7 +424,7 @@ export class TaskParser   {
   
   
   //在linetext中插入日期
-    insertDueDateBeforeTodoist(text, dueDate) {
+    insertDueDateBeforeTodoist(text: any, dueDate: any) {
         const regex = new RegExp(`(${keywords.TODOIST_TAG})`)
         return text.replace(regex, `📅 ${dueDate} $1`);
   }

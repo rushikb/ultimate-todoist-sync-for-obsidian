@@ -29,7 +29,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
     fileOperation: FileOperation | undefined;
     todoistSync: TodoistSync | undefined;
 	lastLines: Map<string,number>;
-	statusBar;
+	statusBar: any;
 	syncLock: Boolean;
 
 	async onload() {
@@ -88,7 +88,10 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 						return
 					}
 					if (!await this.checkAndHandleSyncLock()) return;
-					await this.todoistSync.deletedTaskCheck();
+					const activeFilePath = this.app.workspace.getActiveFile()?.path;
+					if (activeFilePath) {
+						await this.todoistSync!.deletedTaskCheck(activeFilePath);
+					}
 					this.syncLock = false;
 					this.saveSettings()	
 				}catch(error){
@@ -146,7 +149,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 					return
 				}
 				if (!await this.checkAndHandleSyncLock()) return;
-				await this.todoistSync.lineContentNewTaskCheck(editor,view)
+				await this.todoistSync!.lineContentNewTaskCheck(editor,view)
 				this.syncLock = false
 				this.saveSettings()
 
@@ -202,7 +205,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 			console.log(`${oldpath} is renamed`)
 			//读取frontMatter
 			//const frontMatter = await this.fileOperation.getFrontMatter(file)
-			const frontMatter =  await this.cacheOperation.getFileMetadata(oldpath)
+			const frontMatter =  await this.cacheOperation!.getFileMetadata(oldpath)
 			console.log(frontMatter)
 			if(frontMatter === null || frontMatter.todoistTasks === undefined){
 				//console.log('删除的文件中没有task')
@@ -211,13 +214,13 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 			if(!(this.checkModuleClass())){
 					return
 				}
-			await this.cacheOperation.updateRenamedFilePath(oldpath,file.path)
+			await this.cacheOperation!.updateRenamedFilePath(oldpath,file.path)
 			this.saveSettings()
 			
 			//update task description
 			if (!await this.checkAndHandleSyncLock()) return;
 			try {
-				await this.todoistSync.updateTaskDescription(file.path)
+				await this.todoistSync!.updateTaskDescription(file.path)
 			} catch(error) {
 				console.error('An error occurred in updateTaskDescription:', error);
 			}
@@ -248,7 +251,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 
 				if (!await this.checkAndHandleSyncLock()) return;
 				
-				await this.todoistSync.fullTextNewTaskCheck(filepath)
+				await this.todoistSync!.fullTextNewTaskCheck(filepath)
 				this.syncLock = false;
 			} catch(error) {
 				console.error(`An error occurred while modifying the file: ${error.message}`);
@@ -258,7 +261,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 			}
 		}));
 
-		this.registerInterval(window.setInterval(async () => await this.scheduledSynchronization(), this.settings.automaticSynchronizationInterval * 1000));
+		this.registerInterval(window.setInterval(async () => await this.scheduledSynchronization(), Number(this.settings.automaticSynchronizationInterval) * 1000));
 
 		this.app.workspace.on('active-leaf-change',(leaf)=>{
 			this.setStatusBarText()
@@ -450,7 +453,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 				this.lastLines.set(fileName as string, line as number);
 				try{
 					if (!await this.checkAndHandleSyncLock()) return;
-					await this.todoistSync.lineModifiedTaskCheck(filepath as string,lastLineText,lastLine as number,fileContent)
+					await this.todoistSync!.lineModifiedTaskCheck(filepath as string,lastLineText,lastLine as number,fileContent)
 					this.syncLock = false;
 				}catch(error){
 					console.error(`An error occurred while check modified task in line text: ${error}`);
@@ -480,23 +483,26 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 		const taskElement = target.closest("div");    //使用 evt.target.closest() 方法寻找特定的父元素，而不是直接访问事件路径中的特定索引
 		//console.log(taskElement)
 		if (!taskElement) return;
-		const regex = /\[todoist_id:: (\d+)\]/; // 匹配 [todoist_id:: 数字] 格式的字符串
+		const regex = /\[todoist_id:: ([\w]+)\]/; // match [todoist_id:: ID] where ID can be alphanumeric (v6 API)
 		const match = taskElement.textContent?.match(regex) || false;
 		if (match) {
 			const taskId = match[1];
 			//console.log(taskId)
 			//const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (target.checked) {
-				this.todoistSync.closeTask(taskId);
+				this.todoistSync!.closeTask(taskId);
 			} else {
-				this.todoistSync.repoenTask(taskId);
+				this.todoistSync!.repoenTask(taskId);
 			}
 		} else {
 			//console.log('未找到 todoist_id');
 			//开始全文搜索，检查status更新
 			try{
 				if (!await this.checkAndHandleSyncLock()) return;
-				await this.todoistSync.fullTextModifiedTaskCheck()
+				const activeFilePathForCheck = this.app.workspace.getActiveFile()?.path;
+				if (activeFilePathForCheck) {
+					await this.todoistSync!.fullTextModifiedTaskCheck(activeFilePathForCheck);
+				}
 				this.syncLock = false;
 			}catch(error){
 				console.error(`An error occurred while check modified tasks in the file: ${error}`);
@@ -536,7 +542,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 				console.log(`file path undefined`)
 				return
 			}
-			const defaultProjectName = await this.cacheOperation.getDefaultProjectNameForFilepath(filepath as string)
+			const defaultProjectName = await this.cacheOperation!.getDefaultProjectNameForFilepath(filepath as string)
 			if(defaultProjectName === undefined){
 				console.log(`projectName undefined`)
 				return
@@ -554,7 +560,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 		try {
 			if (!await this.checkAndHandleSyncLock()) return;
 			try {
-				await this.todoistSync.syncTodoistToObsidian();
+				await this.todoistSync!.syncTodoistToObsidian();
 			} catch(error) {
 				console.error('An error occurred in syncTodoistToObsidian:', error);
 			}
@@ -580,7 +586,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 
 				if (!await this.checkAndHandleSyncLock()) return;
 				try {
-					await this.todoistSync.fullTextNewTaskCheck(fileKey);
+					await this.todoistSync!.fullTextNewTaskCheck(fileKey);
 				} catch(error) {
 					console.error('An error occurred in fullTextNewTaskCheck:', error);
 				}
@@ -588,7 +594,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 
 				if (!await this.checkAndHandleSyncLock()) return;
 				try {
-					await this.todoistSync.deletedTaskCheck(fileKey);
+					await this.todoistSync!.deletedTaskCheck(fileKey);
 				} catch(error) {
 					console.error('An error occurred in deletedTaskCheck:', error);
 				}
@@ -596,7 +602,7 @@ export default class UltimateTodoistSyncForObsidian extends Plugin {
 
 				if (!await this.checkAndHandleSyncLock()) return;
 				try {
-					await this.todoistSync.fullTextModifiedTaskCheck(fileKey);
+					await this.todoistSync!.fullTextModifiedTaskCheck(fileKey);
 				} catch(error) {
 					console.error('An error occurred in fullTextModifiedTaskCheck:', error);
 				}

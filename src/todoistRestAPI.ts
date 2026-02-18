@@ -1,6 +1,7 @@
-import { TodoistApi } from "@doist/todoist-api-typescript"
+import { TodoistApi, TodoistRequestError } from "@doist/todoist-api-typescript"
 import { App} from 'obsidian';
 import UltimateTodoistSyncForObsidian from "../main";
+import { createObsidianFetchAdapter } from "./obsidianFetchAdapter";
     //convert date from obsidian event
     // 使用示例
     //const str = "2023-03-27";
@@ -8,8 +9,8 @@ import UltimateTodoistSyncForObsidian from "../main";
     //console.log(dateStr); // 输出 2023-03-27T00:00:00.000Z
 function  localDateStringToUTCDatetimeString(localDateString:string) {
         try {
-          if(localDateString === null){
-            return null
+          if(localDateString === null || localDateString === undefined){
+            return undefined
           }
           localDateString = localDateString + "T08:00";
           let localDateObj = new Date(localDateString);
@@ -17,7 +18,7 @@ function  localDateStringToUTCDatetimeString(localDateString:string) {
           return(ISOString);
         } catch (error) {
           console.error(`Error extracting date from string '${localDateString}': ${error}`);
-          return null;
+          return undefined;
         }
 }
 
@@ -34,26 +35,37 @@ export class TodoistRestAPI  {
 
     initializeAPI(){
         const token = this.plugin.settings.todoistAPIToken
-        const api = new TodoistApi(token)
+        const api = new TodoistApi(token, {
+            customFetch: createObsidianFetchAdapter(),
+        })
         return(api)
     }
 
-    async AddTask({ projectId, content, parentId = null, dueDate, dueDatetime,labels, description,priority }: { projectId: string, content: string, parentId?: string , dueDate?: string,dueDatetime?: string, labels?: Array<string>, description?: string,priority?:number }) {
+    async AddTask({ projectId, content, parentId, dueDate, dueDatetime, labels, description, priority }: { projectId: string, content: string, parentId?: string | null, dueDate?: string, dueDatetime?: string, labels?: Array<string>, description?: string, priority?: number }) {
         const api = await this.initializeAPI()
         try {
-          if(dueDate){
-            dueDatetime = localDateStringToUTCDatetimeString(dueDatetime)
-            dueDate = null
-          }  
-          const newTask = await api.addTask({
-            projectId,
-            content,
-            parentId,
-            dueDate,
-            labels,
-            description,
-            priority
-          });
+          // Build the args object, only including defined/non-null properties.
+          // v6 API rejects null values; omit fields instead.
+          // v6 uses RequireOneOrNone for dueDate/dueDatetime, so only one can be set.
+          const args: Record<string, unknown> = { content };
+
+          if (projectId) args.projectId = projectId;
+          if (parentId) args.parentId = parentId;
+          if (labels && labels.length > 0) args.labels = labels;
+          if (description) args.description = description;
+          if (priority !== undefined && priority !== null) args.priority = priority;
+
+          if (dueDate) {
+            // Convert dueDate to dueDatetime; do NOT pass both
+            const converted = localDateStringToUTCDatetimeString(dueDate);
+            if (converted) {
+              args.dueDatetime = converted;
+            }
+          } else if (dueDatetime) {
+            args.dueDatetime = dueDatetime;
+          }
+
+          const newTask = await api.addTask(args as Parameters<typeof api.addTask>[0]);
           return newTask;
         } catch (error) {
           throw new Error(`Error adding task: ${error.message}`);
@@ -62,11 +74,24 @@ export class TodoistRestAPI  {
 
 
     //options:{ projectId?: string, section_id?: string, label?: string , filter?: string,lang?: string, ids?: Array<string>}
-    async GetActiveTasks(options:{ projectId?: string, section_id?: string, label?: string , filter?: string,lang?: string, ids?: Array<string>}) {
+    async GetActiveTasks(options:{ projectId?: string, section_id?: string, label?: string , filter?: string, lang?: string, ids?: Array<string>}) {
       const api = await this.initializeAPI()
       try {
-        const result = await api.getTasks(options);
-        return result;
+        // v6 returns { results, nextCursor }; paginate to collect all tasks
+        const allTasks: Awaited<ReturnType<typeof api.getTask>>[] = [];
+        let cursor: string | null | undefined = undefined;
+
+        do {
+          const args: Record<string, unknown> = { ...options };
+          if (cursor) {
+            args.cursor = cursor;
+          }
+          const response = await api.getTasks(args as Parameters<typeof api.getTasks>[0]);
+          allTasks.push(...response.results);
+          cursor = response.nextCursor;
+        } while (cursor);
+
+        return allTasks;
       } catch (error) {
         throw new Error(`Error get active tasks: ${error.message}`);
       }
@@ -84,13 +109,28 @@ export class TodoistRestAPI  {
         throw new Error('At least one update is required');
         }
         try {
-        if(updates.dueDate){
+        // Build args object, only including defined properties.
+        // v6 uses RequireOneOrNone for dueDate/dueDatetime.
+        const args: Record<string, unknown> = {};
+
+        if (updates.content !== undefined) args.content = updates.content;
+        if (updates.description !== undefined) args.description = updates.description;
+        if (updates.labels !== undefined) args.labels = updates.labels;
+        if (updates.dueString !== undefined) args.dueString = updates.dueString;
+        if (updates.priority !== undefined) args.priority = updates.priority;
+
+        if (updates.dueDate) {
             console.log(updates.dueDate)
-            updates.dueDatetime = localDateStringToUTCDatetimeString(updates.dueDate)
-            updates.dueDate = null
-            console.log(updates.dueDatetime)
-          }  
-        const updatedTask = await api.updateTask(taskId, updates);
+            const converted = localDateStringToUTCDatetimeString(updates.dueDate);
+            if (converted) {
+              args.dueDatetime = converted;
+            }
+            console.log(args.dueDatetime)
+        } else if (updates.dueDatetime) {
+            args.dueDatetime = updates.dueDatetime;
+        }
+
+        const updatedTask = await api.updateTask(taskId, args as Parameters<typeof api.updateTask>[1]);
         return updatedTask;
         } catch (error) {
         throw new Error(`Error updating task: ${error.message}`);
@@ -104,11 +144,11 @@ export class TodoistRestAPI  {
     async OpenTask(taskId:string) {
         const api = await this.initializeAPI()
         try {
-    
+
         const isSuccess = await api.reopenTask(taskId);
         console.log(`Task ${taskId} is reopend`)
         return(isSuccess)
-    
+
         } catch (error) {
             console.error('Error open a  task:', error);
             return
@@ -127,10 +167,10 @@ export class TodoistRestAPI  {
         throw error; // 抛出错误使调用方能够捕获并处理它
         }
     }
-  
-    
 
- 
+
+
+
     // get a task by Id
     async getTaskById(taskId: string) {
         const api = await this.initializeAPI()
@@ -141,8 +181,9 @@ export class TodoistRestAPI  {
         const task = await api.getTask(taskId);
         return task;
         } catch (error) {
-          if (error.response && error.response.status) {
-            const statusCode = error.response.status;
+          // v6 throws TodoistRequestError with httpStatusCode
+          if (error instanceof TodoistRequestError && error.httpStatusCode) {
+            const statusCode = error.httpStatusCode;
             throw new Error(`Error retrieving task. Status code: ${statusCode}`);
           } else {
             throw new Error(`Error retrieving task: ${error.message}`);
@@ -170,9 +211,22 @@ export class TodoistRestAPI  {
     async GetAllProjects() {
         const api = await this.initializeAPI()
         try {
-        const result = await api.getProjects();
-        return(result)
-    
+        // v6 returns { results, nextCursor }; paginate to collect all projects
+        const allProjects: Awaited<ReturnType<typeof api.getProject>>[] = [];
+        let cursor: string | null | undefined = undefined;
+
+        do {
+          const args: Record<string, unknown> = {};
+          if (cursor) {
+            args.cursor = cursor;
+          }
+          const response = await api.getProjects(args as Parameters<typeof api.getProjects>[0]);
+          allProjects.push(...response.results);
+          cursor = response.nextCursor;
+        } while (cursor);
+
+        return allProjects;
+
         } catch (error) {
             console.error('Error get all projects', error);
             return false
@@ -181,24 +235,3 @@ export class TodoistRestAPI  {
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
