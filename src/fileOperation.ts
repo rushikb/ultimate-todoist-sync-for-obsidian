@@ -292,7 +292,7 @@ export class FileOperation   {
         const line = lines[i]
         if (line.includes(taskId) && this.plugin.taskParser!.hasTodoistTag(line)) {
             const oldTaskDueDate = this.plugin.taskParser!.getDueDateFromLineText(line) || ""
-            const newTaskDueDate = this.plugin.taskParser!.ISOStringToLocalDateString(evt.extraData.due_date) || ""
+            const newTaskDueDate = this.plugin.taskParser!.ISOStringToLocalDateString(evt.extraData.dueDate) || ""
             
             //console.log(`${taskId} duedate is updated`)
             console.log(oldTaskDueDate)

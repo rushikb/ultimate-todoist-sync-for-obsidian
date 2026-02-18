@@ -49,38 +49,36 @@ export class TodoistSyncAPI {
 	}
 
 	/**
-	 * Collect all paginated activity log results into a single array.
-	 * Keeps calling getActivityLogs with the nextCursor until all pages are fetched.
+	 * Fetch a single page of activity log results.
+	 * Does NOT paginate through all history — only retrieves the most recent
+	 * page of events. The old Sync API v9 returned ~30 events by default;
+	 * we use limit=100 to get a reasonable window of recent activity without
+	 * making dozens of sequential API calls (Pro users have unlimited history).
 	 */
-	private async getAllPaginatedActivityLogs(args?: GetActivityLogsArgs): Promise<Event[]> {
+	private async getRecentActivityLogs(args?: GetActivityLogsArgs): Promise<Event[]> {
 		const api = this.getAPI();
 		const allEvents: Event[] = [];
-		let cursor: string | null | undefined = undefined;
 
-		do {
-			const requestArgs: GetActivityLogsArgs = {
-				...args,
-				...(cursor ? { cursor } : {}),
-			};
+		const requestArgs: GetActivityLogsArgs = {
+			limit: 100,
+			...args,
+		};
 
-			const response = await api.getActivityLogs(requestArgs);
+		const response = await api.getActivityLogs(requestArgs);
 
-			for (const activityEvent of response.results) {
-				allEvents.push({
-					id: activityEvent.id,
-					objectType: activityEvent.objectType,
-					objectId: activityEvent.objectId,
-					eventType: activityEvent.eventType,
-					eventDate: activityEvent.eventDate,
-					parentProjectId: activityEvent.parentProjectId,
-					parentItemId: activityEvent.parentItemId,
-					initiatorId: activityEvent.initiatorId,
-					extraData: activityEvent.extraData,
-				});
-			}
-
-			cursor = response.nextCursor;
-		} while (cursor);
+		for (const activityEvent of response.results) {
+			allEvents.push({
+				id: activityEvent.id,
+				objectType: activityEvent.objectType,
+				objectId: activityEvent.objectId,
+				eventType: activityEvent.eventType,
+				eventDate: activityEvent.eventDate,
+				parentProjectId: activityEvent.parentProjectId,
+				parentItemId: activityEvent.parentItemId,
+				initiatorId: activityEvent.initiatorId,
+				extraData: activityEvent.extraData,
+			});
+		}
 
 		return allEvents;
 	}
@@ -119,7 +117,7 @@ export class TodoistSyncAPI {
 	// get all activity events using the v6 client
 	async getAllActivityEvents(): Promise<Event[]> {
 		try {
-			const events = await this.getAllPaginatedActivityLogs();
+			const events = await this.getRecentActivityLogs();
 			return events;
 		} catch (error) {
 			throw error;
@@ -153,7 +151,7 @@ export class TodoistSyncAPI {
 	// get completed items activity using v6 client
 	async getCompletedItemsActivity(): Promise<Event[]> {
 		try {
-			const events = await this.getAllPaginatedActivityLogs({
+			const events = await this.getRecentActivityLogs({
 				objectType: 'item',
 				eventType: 'completed',
 			});
@@ -167,7 +165,7 @@ export class TodoistSyncAPI {
 	// get uncompleted items activity using v6 client
 	async getUncompletedItemsActivity(): Promise<Event[]> {
 		try {
-			const events = await this.getAllPaginatedActivityLogs({
+			const events = await this.getRecentActivityLogs({
 				objectType: 'item',
 				eventType: 'uncompleted',
 			});
@@ -181,7 +179,7 @@ export class TodoistSyncAPI {
 	// get updated items activity using v6 client
 	async getUpdatedItemsActivity(): Promise<Event[]> {
 		try {
-			const events = await this.getAllPaginatedActivityLogs({
+			const events = await this.getRecentActivityLogs({
 				objectType: 'item',
 				eventType: 'updated',
 			});
@@ -228,7 +226,7 @@ export class TodoistSyncAPI {
 	// get projects activity using v6 client
 	async getProjectsActivity(): Promise<Event[]> {
 		try {
-			const events = await this.getAllPaginatedActivityLogs({
+			const events = await this.getRecentActivityLogs({
 				objectType: 'project',
 			});
 			return events;

@@ -692,14 +692,14 @@ export class TodoistSync  {
         for (const e of unSynchronizedEvents) {   //如果要修改代码，让completeTaskInTheFile(e.objectId)按照顺序依次执行，可以将Promise.allSettled()方法改为使用for...of循环来处理未同步的事件。具体步骤如下：
             //console.log(`正在 sync ${e.objectId} 的变化到本地`)
             console.log(e)
-            console.log(typeof e.extraData?.last_due_date === 'undefined')
-            if(!(typeof e.extraData?.last_due_date === 'undefined')){
+            console.log(typeof e.extraData?.lastDueDate === 'undefined')
+            if(!(typeof e.extraData?.lastDueDate === 'undefined')){
                 //console.log(`prepare update dueDate`)
                 await this.syncUpdatedTaskDueDateToObsidian(e)
 
             }
 
-            if(!(typeof e.extraData?.last_content === 'undefined')){
+            if(!(typeof e.extraData?.lastContent === 'undefined')){
                 //console.log(`prepare update content`)
                 await this.syncUpdatedTaskContentToObsidian(e)
             }
@@ -769,20 +769,42 @@ export class TodoistSync  {
 
     async syncTodoistToObsidian(){
         try{
-            const all_activity_events = await this.plugin.todoistSyncAPI!.getNonObsidianAllActivityEvents()
+            console.log('[Todoist Sync] Fetching activity events...')
+            let all_activity_events: any[] = []
+            try {
+                all_activity_events = await this.plugin.todoistSyncAPI!.getNonObsidianAllActivityEvents()
+                console.log(`[Todoist Sync] Total non-Obsidian activity events: ${all_activity_events.length}`)
+            } catch (activityErr) {
+                console.error('[Todoist Sync] Failed to fetch activity events (Activity Log may require Todoist Pro):', activityErr)
+                return
+            }
+            if (!all_activity_events || all_activity_events.length === 0) {
+                console.log('[Todoist Sync] No activity events to process')
+                return
+            }
 
             // remove synchonized events
             const savedEvents = await this.plugin.cacheOperation!.loadEventsFromCache()
+            console.log(`[Todoist Sync] Saved events in cache: ${savedEvents.length}`)
             const result1 = all_activity_events.filter(
             (objA: any) => !savedEvents.some((objB: any) => objB.id === objA.id)
             )
+            console.log(`[Todoist Sync] New unsynchronized events: ${result1.length}`)
 
 
             const savedTasks = await this.plugin.cacheOperation!.loadTasksFromCache()
+            console.log(`[Todoist Sync] Saved tasks in cache: ${savedTasks.length}`)
+            if (savedTasks.length > 0) {
+                console.log(`[Todoist Sync] Sample cached task IDs:`, savedTasks.slice(0, 3).map((t: any) => t.id))
+            }
+            if (result1.length > 0) {
+                console.log(`[Todoist Sync] Sample event objectIds:`, result1.slice(0, 3).map((e: any) => ({ objectId: e.objectId, eventType: e.eventType, objectType: e.objectType })))
+            }
             // 找出 task id 存在于 Obsidian 中的 task activity
             const result2 = result1.filter(
             (objA: any) => savedTasks.some((objB: any) => objB.id === objA.objectId)
             )
+            console.log(`[Todoist Sync] Events matching cached tasks: ${result2.length}`)
             // 找出 task id 存在于 Obsidian 中的 note activity
             const result3 = result1.filter(
                 (objA: any) => savedTasks.some((objB: any) => objB.id === objA.parentItemId)
@@ -791,19 +813,16 @@ export class TodoistSync  {
 
 
 
-            const unsynchronized_item_completed_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'completed', objectType: 'item' })
-            const unsynchronized_item_uncompleted_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'uncompleted', objectType: 'item' })
+            // v6 SDK denormalizes object types: 'item' → 'task', 'note' → 'comment'
+            const unsynchronized_item_completed_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'completed', objectType: 'task' })
+            const unsynchronized_item_uncompleted_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'uncompleted', objectType: 'task' })
 
             //Items updated (only changes to content, description, due_date and responsible_uid)
-            const unsynchronized_item_updated_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'updated', objectType: 'item' })
+            const unsynchronized_item_updated_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result2, { eventType: 'updated', objectType: 'task' })
 
-            const unsynchronized_notes_added_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result3, { eventType: 'added', objectType: 'note' })
+            const unsynchronized_notes_added_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result3, { eventType: 'added', objectType: 'comment' })
             const unsynchronized_project_events = this.plugin.todoistSyncAPI!.filterActivityEvents(result1, { objectType: 'project' })
-            console.log(unsynchronized_item_completed_events)
-            console.log(unsynchronized_item_uncompleted_events)
-            console.log(unsynchronized_item_updated_events)
-            console.log(unsynchronized_project_events) 
-            console.log(unsynchronized_notes_added_events)
+            console.log(`[Todoist Sync] Completed: ${unsynchronized_item_completed_events.length}, Uncompleted: ${unsynchronized_item_uncompleted_events.length}, Updated: ${unsynchronized_item_updated_events.length}, Notes: ${unsynchronized_notes_added_events.length}, Projects: ${unsynchronized_project_events.length}`)
     
             await this.syncCompletedTaskStatusToObsidian(unsynchronized_item_completed_events)
             await this.syncUncompletedTaskStatusToObsidian(unsynchronized_item_uncompleted_events)
