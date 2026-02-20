@@ -726,7 +726,7 @@ export class TodoistSync  {
         this.plugin.fileOperation!.syncUpdatedTaskContentToTheFile(e)
         const content = e.extraData?.content
         this.plugin.cacheOperation!.modifyTaskToCacheByID(e.objectId,{content})
-        new Notice(`The content of Task ${e.parentItemId} has been modified.`)
+        console.log(`[Todoist Sync] The content of Task ${e.parentItemId} has been modified.`)
 
     }
 
@@ -735,7 +735,7 @@ export class TodoistSync  {
         //修改cache的日期，要使用todoist的格式
         const due = await this.plugin.todoistRestAPI!.getTaskDueById(e.objectId)
         this.plugin.cacheOperation!.modifyTaskToCacheByID(e.objectId,{due: due ?? undefined})
-        new Notice(`The due date of Task ${e.parentItemId} has been modified.`)
+        console.log(`[Todoist Sync] The due date of Task ${e.parentItemId} has been modified.`)
 
     }
 
