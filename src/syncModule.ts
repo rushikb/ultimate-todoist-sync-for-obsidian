@@ -483,7 +483,7 @@ export class TodoistSync  {
                     message += " Priority was changed.";
                 }
                 
-                new Notice(message);
+                console.log(`[Todoist Sync] ${message}`);
 
             } else {
                 //console.log(`Task ${lineTask_todoist_id} did not change`);
